@@ -42,7 +42,7 @@ class GuideTest extends TestCase
 
         $this->channelOneGuide = Guide::factory()->createOne([
             'channel_nr' => Channel::ONE->value,
-         ]);
+        ]);
         $this->previousGuide = Guide::factory()->createOne([
             'channel_nr' => Channel::TWO->value,
             'starts_at' => $start->copy()->subMinutes(2),
@@ -75,14 +75,21 @@ class GuideTest extends TestCase
         ]);
     }
 
+    public function test_guide_request_with_non_existing_channel(): void
+    {
+        $this->getJson(route('guide', [
+            'channel_nr' => 6,
+            'date' => now()->toDateString(),
+        ]))->assertStatus(Response::HTTP_NOT_FOUND);
+    }
+
     public function test_guide_request_validation(): void
     {
         $this->getJson(route('guide', [
-            'channel_nr' => 'channelNumber',
+            'channel_nr' => Channel::ONE,
             'date' => 'date',
         ]))->assertStatus(Response::HTTP_UNPROCESSABLE_ENTITY)
             ->assertJsonValidationErrors([
-                'channel_nr',
                 'date',
             ], 'errors');
     }

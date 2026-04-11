@@ -17,11 +17,10 @@ class GuideController extends Controller
 
     }
 
-    public function guide(GetGuideRequest $request): AnonymousResourceCollection
+    public function guide(GetGuideRequest $request, Channel $channel_nr): AnonymousResourceCollection
     {
-        $channel = Channel::from($request->validated()['channel_nr']);
         $date = Carbon::parse($request->validated()['date']);
-        $guides = $this->guideService->getChannelScheduleForDate($channel, $date);
+        $guides = $this->guideService->getChannelScheduleForDate($channel_nr, $date);
 
         return GuideResource::collection($guides);
     }

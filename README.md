@@ -95,10 +95,10 @@ GET /api/guide/1/2024-01-01
 #### Example Validation Error
 ```json
 {
-    "message": "The selected channel nr is invalid.",
+    "message": "The date field must match the format Y-m-d.",
     "errors": {
-        "channel_nr": [
-            "The selected channel nr is invalid."
+        "date": [
+            "The date field must match the format Y-m-d."
         ]
     }
 }
