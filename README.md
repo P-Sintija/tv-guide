@@ -36,7 +36,7 @@ php artisan key:generate
 ### Start the Application
 Make sure Docker is running, then start Laravel Sail:
 ```bash
-./vendor/bin/sail up -d
+./vendor/bin/sail up
 ```
 Run database migrations
 ```bash
@@ -45,5 +45,61 @@ Run database migrations
 
 ### Stop the Application
 ```bash
-./vendor/bin/sail down -v
+./vendor/bin/sail down
+```
+## API Endpoints
+
+### GET `/api/guide/{channel_nr}/{date}`
+Returns TV schedule for a given channel and date.
+
+|Parameter|Type|Description|
+| :----------- |:--------------| :-------------|
+|`channel_nr`|integer|Channel number (1–3)|
+|`date`|string|Date in format `YYYY-MM-DD`|
+
+#### Example Request
+```bash
+GET /api/guide/1/2024-01-01
+```
+#### Example Response
+```json
+{
+    "data": [
+        {
+            "id": 2,
+            "title": "Panorāma",
+            "channel_nr": 1,
+            "starts_at": "2024-01-01 20:00:00",
+            "ends_at": "2024-01-01 20:36:00",
+            "adjusted_ends_at": "2024-01-01 20:37:00"
+        },
+        {
+            "id": 1,
+            "title": "Šodienas jautājums",
+            "channel_nr": 1,
+            "starts_at": "2024-01-01 20:37:00",
+            "ends_at": "2024-01-01 20:56:00",
+            "adjusted_ends_at": "2024-01-01 20:56:10"
+        },
+        {
+            "id": 3,
+            "title": "Sporta ziņas",
+            "channel_nr": 1,
+            "starts_at": "2024-01-01 20:56:10",
+            "ends_at": "2024-01-01 21:02:00",
+            "adjusted_ends_at": "2024-01-01 21:02:00"
+        }
+    ]
+}
+```
+#### Example Validation Error
+```json
+{
+    "message": "The selected channel nr is invalid.",
+    "errors": {
+        "channel_nr": [
+            "The selected channel nr is invalid."
+        ]
+    }
+}
 ```
