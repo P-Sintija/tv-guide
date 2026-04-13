@@ -7,7 +7,7 @@ use Carbon\Carbon;
 
 trait WithAssertHelper
 {
-    private function assertGuide(Guide $expected, array $actual, Carbon $adjustedEndsAt): void
+    public function assertGuide(Guide $expected, array $actual, Carbon $adjustedEndsAt): void
     {
         $this->assertEquals($expected->id, $actual['id']);
         $this->assertEquals($expected->title, $actual['title']);

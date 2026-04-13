@@ -25,7 +25,7 @@ class GuideRepository
             ->first();
     }
 
-    public function getUpcomingGuidesForChannel(Channel $channel, Carbon $time, int $count): Collection
+    public function getUpcomingGuidesForChannel(Channel $channel, Carbon $time, int $count = 1): Collection
     {
         return Guide::where('channel_nr', $channel->value)
             ->where('starts_at', '>=', $time)

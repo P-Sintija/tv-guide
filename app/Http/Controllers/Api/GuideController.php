@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Enums\Channel;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\GetGuideRequest;
+use App\Http\Requests\StoreGuideRequest;
 use App\Http\Resources\GuideResource;
 use App\Services\GuideService;
 use Carbon\Carbon;
@@ -38,5 +39,12 @@ class GuideController extends Controller
         $guides = $this->guideService->getUpcomingForChannel($channel_nr);
 
         return GuideResource::collection($guides);
+    }
+
+    public function store(StoreGuideRequest $request): GuideResource
+    {
+        $guide = $this->guideService->create($request->validated());
+
+        return new GuideResource($guide);
     }
 }

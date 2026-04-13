@@ -60,6 +60,20 @@ class GuideService
             ->take(self::UPCOMING_COUNT);
     }
 
+    public function create(array $attributes): Guide
+    {
+        $guide = Guide::create($attributes);
+        $upcomingGuides = $this->guideRepository->getUpcomingGuidesForChannel($guide->channel_nr, $guide->ends_at);
+
+        if ($upcomingGuides->isEmpty()) {
+            return $guide;
+        }
+
+        $upcomingGuides->prepend($guide);
+
+        return $this->adjustEndTimes($upcomingGuides)->first();
+    }
+
     private function getDayRange(string $date): array
     {
         $start = Carbon::parse($date)->setTime(self::GUIDE_START_HOUR, 0);

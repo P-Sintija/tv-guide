@@ -25,14 +25,22 @@ DB_DATABASE=laravel
 DB_USERNAME=sail
 DB_PASSWORD=password
 ```
+Add authentication credentials (used for *POST /api/guide*) in `.env`:
+```bash
+BASIC_AUTH_USERNAME=
+BASIC_AUTH_PASSWORD=
+```
+
 ### Install Dependencies
 ```bash
 composer install
 ```
+
 ### Generate Application Key
 ```bash
 php artisan key:generate
 ```
+
 ### Start the Application
 Make sure Docker is running, then start Laravel Sail:
 ```bash
@@ -47,6 +55,12 @@ Run database migrations
 ```bash
 ./vendor/bin/sail down
 ```
+
+### Running Tests
+```bash
+./vendor/bin/sail artisan test
+```
+
 ## API Endpoints
 
 ### GET `/api/guide/{channel_nr}/{date}`
@@ -121,7 +135,7 @@ GET /api/on-air/1
     "data": {
         "id": 1,
         "title": "Panorāma",
-        "channel_nr": "1",
+        "channel_nr": 1,
         "starts_at": "2024-01-01 20:00:00",
         "ends_at": "2024-01-01 20:36:00",
         "adjusted_ends_at": "2024-01-01 20:37:00"
@@ -173,3 +187,56 @@ GET /api/upcoming/1
 }
 ```
 
+### POST `/api/guide`
+Creates a new TV program entry. This endpoint is protected by **Basic Authentication**, [Credentials are defined in `.env`](#environment-setup):
+
+#### Request Body
+|Parameter|Type|Description|
+| :----------- |:--------------| :-------------|
+|`title`|string|Program title (max 100 characters)|
+|`channel_nr`|integer|Channel number (1–3)|
+|`starts_at`|string|Start datetime (`YYYY-MM-DD HH:mm:ss`) |
+|`ends_at`|string|End datetime (`YYYY-MM-DD HH:mm:ss`, must be after `starts_at`)|
+
+#### Request Example
+```bash
+POST /api/guide
+Content-Type: application/json
+Authorization: Basic YWRtaW46cGFzc3dvcmQ=
+{
+    "title": "Rīta Panorāma",
+    "channel_nr": 1,
+    "starts_at": "2024-01-01 06:30:00",
+    "ends_at": "2024-01-01 08:35:00"
+}
+```
+#### Response Example
+```json
+{
+    "data": {
+        "id": 4,
+        "title": "Rīta Panorāma",
+        "channel_nr": 1,
+        "starts_at": "2024-01-01 06:30:00",
+        "ends_at": "2024-01-01 08:35:00",
+        "adjusted_ends_at": "2024-01-01 20:00:00"
+    }
+}
+```
+#### Example Validation Error
+```json
+{
+    "message": "The given time range overlaps with an existing guide for this channel.",
+    "errors": {
+        "ends_at": [
+            "The given time range overlaps with an existing guide for this channel."
+        ]
+    }
+}
+```
+#### Example Unauthorized Response
+```json
+{
+    "error": "Unauthorized"
+}
+```

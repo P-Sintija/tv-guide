@@ -10,13 +10,16 @@ class GuideResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $endsAt = $this->ends_at->format(GuideService::DATE_FORMAT);
+        $adjustedEndsAt = $this->adjusted_ends_at?->format(GuideService::DATE_FORMAT) ?? $endsAt;
+
         return [
             'id' => $this->id,
             'title' => $this->title,
-            'channel_nr' => $this->channel_nr->value,
+            'channel_nr' => (int)$this->channel_nr->value,
             'starts_at' => $this->starts_at->format(GuideService::DATE_FORMAT),
-            'ends_at' => $this->ends_at->format(GuideService::DATE_FORMAT),
-            'adjusted_ends_at' => $this->adjusted_ends_at->format(GuideService::DATE_FORMAT),
+            'ends_at' => $endsAt,
+            'adjusted_ends_at' => $adjustedEndsAt,
         ];
     }
 }
