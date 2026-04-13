@@ -7,12 +7,15 @@ use App\Models\Guide;
 use App\Repositories\GuideRepository;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Collection as SupportCollection;
 
 class GuideService
 {
     public const GUIDE_START_HOUR = 6;
 
     public const DATE_FORMAT = 'Y-m-d H:i:s';
+
+    public const UPCOMING_COUNT = 10;
 
     public function __construct(private GuideRepository $guideRepository) 
     {
@@ -22,7 +25,7 @@ class GuideService
     public function getChannelScheduleForDate(Channel $channel, string $date): Collection
     {
         [$start, $end] = $this->getDayRange($date);
-        $guidesInRange = $this->guideRepository->getGuidesForChannelInRange($channel, $start, $end);
+        $guidesInRange = $this->guideRepository->getGuidesForChannelInRange($channel, $start);
         $guidesWithAdjustedEndTimes = $this->adjustEndTimes($guidesInRange);
 
         return $guidesWithAdjustedEndTimes->filter(function (Guide $guide) use ($start, $end) {
@@ -30,7 +33,34 @@ class GuideService
         });
     }
 
-    public function getDayRange(string $date): array
+    public function getOnAirForChannel(Channel $channel): ?Guide
+    {
+        $time = now();
+        $onAirGuide = $this->guideRepository->getGuideOnAirForChannel($channel, $time);
+
+        if (!$onAirGuide) {
+            return null;
+        }
+
+        $upcomingGuides = $this->getUpcoming($channel, $onAirGuide, $time);
+
+        return !$upcomingGuides
+            ? null
+            : $this->adjustEndTimes($upcomingGuides)->first();
+    }
+
+    public function getUpcomingForChannel(Channel $channel): SupportCollection
+    {
+        $time = now();
+        $onAirGuide = $this->guideRepository->getGuideOnAirForChannel($channel, $time);
+        $count = $onAirGuide ? self::UPCOMING_COUNT : self::UPCOMING_COUNT + 1;
+        $upcomingGuides = $this->getUpcoming($channel, $onAirGuide, $time, $count, true);
+
+        return $this->adjustEndTimes($upcomingGuides)
+            ->take(self::UPCOMING_COUNT);
+    }
+
+    private function getDayRange(string $date): array
     {
         $start = Carbon::parse($date)->setTime(self::GUIDE_START_HOUR, 0);
         $end = $start->copy()->addDay();
@@ -38,14 +68,36 @@ class GuideService
         return [$start, $end];
     }
 
-    private function adjustEndTimes(Collection $guides): Collection
+    private function adjustEndTimes(SupportCollection $guides): SupportCollection
     {
-        return $guides->values()
-            ->map(function (Guide $item, int $index) use ($guides) {
-                $next = $guides[$index + 1] ?? null;
-                $item->adjusted_ends_at = $next ? $next->starts_at : $item->ends_at;
+        $guides = $guides->values();
 
-                return $item;
-            });
+        return $guides->map(function (Guide $item, int $index) use ($guides) {
+            $next = $guides[$index + 1] ?? null;
+            $item->adjusted_ends_at = $next ? $next->starts_at : $item->ends_at;
+
+            return $item;
+        });
+    }
+
+    private function getUpcoming(
+        Channel $channel,
+        ?Guide $onAirGuide,
+        Carbon $time,
+        int $count = 1,
+        bool $asCollection = false
+    ): ?SupportCollection {
+        $startsAt = $onAirGuide ? $onAirGuide->ends_at : $time;
+        $upcomingGuides = $this->guideRepository->getUpcomingGuidesForChannel($channel, $startsAt, $count);
+
+        if ($upcomingGuides->isEmpty() && $onAirGuide?->ends_at < $time) {
+            return $asCollection ? collect() : null;
+        }
+
+        if ($onAirGuide) {
+            $upcomingGuides->prepend($onAirGuide);
+        }
+
+        return $upcomingGuides;
     }
 }

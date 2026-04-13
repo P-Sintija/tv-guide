@@ -103,3 +103,73 @@ GET /api/guide/1/2024-01-01
     }
 }
 ```
+
+### GET `/api/on-air/{channel_nr}`
+Returns the currently airing program for the given channel. If no program is currently airing, a `204 No Content` response is returned.
+
+|Parameter|Type|Description|
+| :----------- |:--------------| :-------------|
+|`channel_nr`|integer|Channel number (1–3)|
+
+#### Example Request
+```bash
+GET /api/on-air/1
+```
+#### Example Response
+```json
+{
+    "data": {
+        "id": 1,
+        "title": "Panorāma",
+        "channel_nr": "1",
+        "starts_at": "2024-01-01 20:00:00",
+        "ends_at": "2024-01-01 20:36:00",
+        "adjusted_ends_at": "2024-01-01 20:37:00"
+    }
+}
+```
+
+### GET `/api/upcoming/{channel_nr}`
+Returns the next 10 upcoming programs for the given channel, including the program that is currently on air (if any).
+
+|Parameter|Type|Description|
+| :----------- |:--------------| :-------------|
+|`channel_nr`|integer|Channel number (1–3)|
+
+#### Example Request
+```bash
+GET /api/upcoming/1
+```
+#### Example Response
+```json
+{
+    "data": [
+        {
+            "id": 2,
+            "title": "Panorāma",
+            "channel_nr": 1,
+            "starts_at": "2024-01-01 20:00:00",
+            "ends_at": "2024-01-01 20:36:00",
+            "adjusted_ends_at": "2024-01-01 20:37:00"
+        },
+        {
+            "id": 1,
+            "title": "Šodienas jautājums",
+            "channel_nr": 1,
+            "starts_at": "2024-01-01 20:37:00",
+            "ends_at": "2024-01-01 20:56:00",
+            "adjusted_ends_at": "2024-01-01 20:56:10"
+        },
+        {
+            "id": 3,
+            "title": "Sporta ziņas",
+            "channel_nr": 1,
+            "starts_at": "2024-01-01 20:56:10",
+            "ends_at": "2024-01-01 21:02:00",
+            "adjusted_ends_at": "2024-01-01 21:02:00"
+        },
+        ...
+    ]
+}
+```
+

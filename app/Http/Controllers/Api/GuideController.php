@@ -9,6 +9,7 @@ use App\Http\Resources\GuideResource;
 use App\Services\GuideService;
 use Carbon\Carbon;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Http\Response;
 
 class GuideController extends Controller
 {
@@ -21,6 +22,20 @@ class GuideController extends Controller
     {
         $date = Carbon::parse($request->validated()['date']);
         $guides = $this->guideService->getChannelScheduleForDate($channel_nr, $date);
+
+        return GuideResource::collection($guides);
+    }
+
+    public function onAir(Channel $channel_nr): GuideResource|Response
+    {
+        $guide = $this->guideService->getOnAirForChannel($channel_nr);
+
+        return !$guide ? response()->noContent() : new GuideResource($guide);
+    }
+
+    public function upcoming(Channel $channel_nr): AnonymousResourceCollection
+    {
+        $guides = $this->guideService->getUpcomingForChannel($channel_nr);
 
         return GuideResource::collection($guides);
     }

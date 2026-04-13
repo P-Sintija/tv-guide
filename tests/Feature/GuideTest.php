@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Enums\Channel;
 use App\Models\Guide;
 use App\Services\GuideService;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Response;
 use Tests\Helpers\WithAssertHelper;
@@ -17,62 +18,16 @@ class GuideTest extends TestCase
     use WithAssertHelper;
     use WithGuideApiRoutes;
 
-    private GuideService $guideService;
+    private Carbon $dayStart;
 
-    private Guide $channelOneGuide;
-
-    private Guide $previousGuide;
-
-    private Guide $todayFirstGuide;
-
-    private Guide $todaySecondGuide;
-
-    private Guide $todayLastGuide;
-
-    private Guide $tomorrowGuide;
-
-    private Guide $dayAfterTomorrowGuide;
+    private Carbon $dayEnd;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->guideService = $this->app->make(GuideService::class);
-        [$start, $end] = $this->guideService->getDayRange(now());
-
-        $this->channelOneGuide = Guide::factory()->createOne([
-            'channel_nr' => Channel::ONE->value,
-        ]);
-        $this->previousGuide = Guide::factory()->createOne([
-            'channel_nr' => Channel::TWO->value,
-            'starts_at' => $start->copy()->subMinutes(2),
-            'ends_at' => $start->copy(),
-        ]);
-        $this->todayFirstGuide = Guide::factory()->createOne([
-            'channel_nr' => Channel::TWO->value,
-            'starts_at' => $start->copy(),
-            'ends_at' => $start->copy()->addHour(),
-        ]);
-        $this->todaySecondGuide = Guide::factory()->createOne([
-            'channel_nr' => Channel::TWO->value,
-            'starts_at' => $start->copy()->addHours(5)->addMinutes(37),
-            'ends_at' => $start->copy()->addHours(7),
-        ]);
-        $this->todayLastGuide = Guide::factory()->createOne([
-            'channel_nr' => Channel::TWO->value,
-            'starts_at' => $end->copy()->subSecond(),
-            'ends_at' => $end->copy()->addSecond(),
-        ]);
-        $this->tomorrowGuide = Guide::factory()->createOne([
-            'channel_nr' => Channel::TWO->value,
-            'starts_at' => $end->copy()->addMinute(),
-            'ends_at' => $end->copy()->addDay(),
-        ]);
-        $this->dayAfterTomorrowGuide = Guide::factory()->createOne([
-            'channel_nr' => Channel::TWO->value,
-            'starts_at' => $end->copy()->addDay()->addMinute(),
-            'ends_at' => $end->copy()->addDay()->addHour(),
-        ]);
+        $this->dayStart =  now()->setTime(GuideService::GUIDE_START_HOUR, 0);
+        $this->dayEnd = $this->dayStart->copy()->addDay();
     }
 
     public function test_guide_request_with_non_existing_channel(): void
@@ -94,58 +49,219 @@ class GuideTest extends TestCase
             ], 'errors');
     }
 
-    public function test_can_get_guide_for_today(): void
+    public function test_returns_guides_with_adjusted_end_times_for_a_specific_day(): void
+    {
+        $previousGuide = Guide::factory()->createOne([
+            'channel_nr' => Channel::TWO->value,
+            'starts_at' => $this->dayStart->copy()->subMinutes(2),
+            'ends_at' => $this->dayStart->copy()->addMinutes(5),
+        ]);
+
+        $todaysFirstGuide = Guide::factory()->createOne([
+            'channel_nr' => Channel::TWO->value,
+            'starts_at' => $this->dayStart->copy(),
+            'ends_at' => $this->dayStart->copy()->addHour(),
+        ]);
+
+        $todaysSecondGuide = Guide::factory()->createOne([
+            'channel_nr' => Channel::TWO->value,
+            'starts_at' => $todaysFirstGuide->ends_at->copy(),
+            'ends_at' => $todaysFirstGuide->ends_at->copy()->addHour(),
+        ]);
+
+        $tomorrowGuide = Guide::factory()->createOne([
+            'channel_nr' => Channel::TWO->value,
+            'starts_at' => $this->dayEnd->copy()->addHour(),
+            'ends_at' => $this->dayEnd->copy()->addHours(4),
+        ]);
+
+        $responseData = $this->getGuide(Channel::TWO, now())
+            ->assertOk()
+            ->assertJsonCount(2, 'data')
+            ->assertJsonMissing(['id' => $previousGuide->id])
+            ->assertJsonMissing(['id' => $tomorrowGuide->id]);
+
+        [$firstGuide, $lastGuide] = $responseData->json('data');
+        $this->assertGuide($todaysFirstGuide, $firstGuide, $todaysFirstGuide->ends_at);
+        $this->assertGuide($todaysSecondGuide, $lastGuide, $tomorrowGuide->starts_at);
+    }
+
+    public function test_guide_for_channel_with_no_guides(): void
     {
         $this->getGuide(Channel::ONE, now())
             ->assertOk()
-            ->assertJsonCount(1, 'data')
-            ->assertJsonFragment(['id' => $this->channelOneGuide->id]);
+            ->assertJsonCount(0, 'data');
+    }
+
+    public function test_guide_for_channel_with_ended_guides(): void
+    {
+        Guide::factory()->createOne([
+            'channel_nr' => Channel::TWO->value,
+            'starts_at' => $this->dayStart->copy()->subMinutes(2),
+            'ends_at' => $this->dayStart->copy()->addMinutes(5),
+        ]);
 
         $this->getGuide(Channel::TWO, now())
-            ->assertOk()
-            ->assertJsonCount(3, 'data')
-            ->assertJsonFragment(['id' => $this->todayFirstGuide->id])
-            ->assertJsonFragment(['id' => $this->todaySecondGuide->id])
-            ->assertJsonFragment(['id' => $this->todayLastGuide->id]);
-    }
-
-    public function test_can_get_next_day_guide(): void
-    {
-        $this->getGuide(Channel::TWO, now()->addDay())
-            ->assertOk()
-            ->assertJsonCount(1, 'data')
-            ->assertJsonFragment(['id' => $this->tomorrowGuide->id]);
-    }
-
-    public function test_excludes_out_of_range_guides(): void
-    {
-        $this->getGuide(Channel::ONE, now()->addDay())
             ->assertOk()
             ->assertJsonCount(0, 'data');
-
-        $this->getGuide(Channel::TWO, now())
-            ->assertOk()
-            ->assertJsonCount(3, 'data')
-            ->assertJsonMissing(['id' => $this->previousGuide->id])
-            ->assertJsonMissing(['id' => $this->tomorrowGuide->id])
-            ->assertJsonMissing(['id' => $this->dayAfterTomorrowGuide->id]);
     }
 
-    public function test_adjusts_end_times_correctly(): void
+    public function test_on_air_request_with_non_existing_channel(): void
     {
-        $data = $this->getGuide(Channel::ONE, now())->json();
-        $this->assertGuide($this->channelOneGuide, $data['data'][0], $this->channelOneGuide->ends_at);
+        $this->getJson(route('on-air', [
+            'channel_nr' => 6
+        ]))->assertStatus(Response::HTTP_NOT_FOUND);
+    }
 
-        $todayData = $this->getGuide(Channel::TWO, now())->json();
-        [$firstGuide, $secondGuide, $lastGuide] = $todayData['data'];
-        $this->assertGuide($this->todayFirstGuide, $firstGuide, $this->todaySecondGuide->starts_at);
-        $this->assertGuide($this->todaySecondGuide, $secondGuide, $this->todayLastGuide->starts_at);
-        $this->assertGuide($this->todayLastGuide, $lastGuide, $this->tomorrowGuide->starts_at);
+    public function test_on_air_for_channel_with_no_guides(): void
+    {
+        $this->getOnAir(Channel::ONE)
+            ->assertStatus(Response::HTTP_NO_CONTENT);
+    }
 
-        $tomorrowData = $this->getGuide(Channel::TWO, now()->addDay())->json();
-        $this->assertGuide($this->tomorrowGuide, $tomorrowData['data'][0], $this->dayAfterTomorrowGuide->starts_at);
+    public function test_returns_no_content_when_nothing_is_on_air(): void
+    {
+        $guide = Guide::factory()->createOne([
+            'channel_nr' => Channel::TWO->value,
+            'starts_at' => $this->dayStart->copy()->subMinutes(2),
+            'ends_at' => $this->dayStart->copy()->addMinutes(5),
+        ]);
 
-        $dayAfterTomorrowData = $this->getGuide(Channel::TWO, now()->addDays(2))->json();
-        $this->assertGuide($this->dayAfterTomorrowGuide, $dayAfterTomorrowData['data'][0], $this->dayAfterTomorrowGuide->ends_at);
+        $this->travelTo($guide->ends_at->copy()->addSecond());
+
+        $this->getOnAir(Channel::TWO)
+            ->assertStatus(Response::HTTP_NO_CONTENT);
+    }
+
+    public function test_returns_guide_when_it_is_currently_on_air(): void
+    {
+        $guide = Guide::factory()->createOne([
+            'channel_nr' => Channel::TWO->value,
+            'starts_at' => $this->dayStart->copy(),
+            'ends_at' => $this->dayStart->copy()->addHour(),
+        ]);
+
+        $nextGuide = Guide::factory()->createOne([
+            'channel_nr' => Channel::TWO->value,
+            'starts_at' => $guide->ends_at->copy()->addHour(),
+            'ends_at' => $guide->ends_at->copy()->addHours(3),
+        ]);
+
+        $this->travelTo($guide->starts_at->copy()->addMinutes(37));
+
+        $responseData = $this->getOnAir(Channel::TWO)
+            ->assertOk();
+
+        $guideData = $responseData->json('data');
+        $this->assertGuide($guide, $guideData, $nextGuide->starts_at);
+    }
+
+    public function test_returns_current_guide_when_next_guide_has_not_started_yet(): void
+    {
+        $guide = Guide::factory()->createOne([
+            'channel_nr' => Channel::TWO->value,
+            'starts_at' => $this->dayStart->copy(),
+            'ends_at' => $this->dayStart->copy()->addHour(),
+        ]);
+
+        $nextGuide = Guide::factory()->createOne([
+            'channel_nr' => Channel::TWO->value,
+            'starts_at' => $guide->ends_at->copy()->addHour(),
+            'ends_at' => $guide->ends_at->copy()->addHours(3),
+        ]);
+
+        $this->travelTo($guide->ends_at->copy()->addMinutes(5));
+
+        $responseData = $this->getOnAir(Channel::TWO)
+            ->assertOk();
+
+        $guideData = $responseData->json('data');
+        $this->assertGuide($guide, $guideData, $nextGuide->starts_at);
+    }
+
+    public function test_upcoming_request_with_non_existing_channel(): void
+    {
+        $this->getJson(route('upcoming', [
+            'channel_nr' => 6
+        ]))->assertStatus(Response::HTTP_NOT_FOUND);
+    }
+
+    public function test_upcoming_for_channel_with_no_guides(): void
+    {
+        $this->getUpcoming(Channel::ONE)
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
+    }
+
+    public function test_returns_upcoming_guides_when_nothing_is_on_air(): void
+    {
+        $todaysFirstGuide = Guide::factory()->createOne([
+            'channel_nr' => Channel::TWO->value,
+            'starts_at' => $this->dayStart->copy(),
+            'ends_at' => $this->dayStart->copy()->addHour(),
+        ]);
+
+        $todaysSecondGuide = Guide::factory()->createOne([
+            'channel_nr' => Channel::TWO->value,
+            'starts_at' => $this->dayStart->copy()->addHour(),
+            'ends_at' => $this->dayStart->copy()->addHours(2),
+        ]);
+
+        $this->travelTo($this->dayStart->copy()->subSecond());
+
+        $responseData = $this->getUpcoming(Channel::TWO)
+            ->assertOk()
+            ->assertJsonCount(2, 'data');
+
+        [$firstGuide, $lastGuide] = $responseData->json('data');
+        $this->assertGuide($todaysFirstGuide, $firstGuide, $todaysFirstGuide->ends_at);
+        $this->assertGuide($todaysSecondGuide, $lastGuide, $todaysSecondGuide->ends_at);
+    }
+
+    public function test_returns_upcoming_guides_including_current_when_on_air(): void
+    {
+        $todaysFirstGuide = Guide::factory()->createOne([
+            'channel_nr' => Channel::TWO->value,
+            'starts_at' => $this->dayStart->copy(),
+            'ends_at' => $this->dayStart->copy()->addHour(),
+        ]);
+
+        $todaysSecondGuide = Guide::factory()->createOne([
+            'channel_nr' => Channel::TWO->value,
+            'starts_at' => $todaysFirstGuide->ends_at->copy()->addMinute(),
+            'ends_at' => $todaysFirstGuide->ends_at->copy()->addHour(),
+        ]);
+
+        $tomorrowGuide = Guide::factory()->createOne([
+            'channel_nr' => Channel::TWO->value,
+            'starts_at' => $this->dayEnd->copy()->addHour(),
+            'ends_at' => $this->dayEnd->copy()->addHours(4),
+        ]);
+
+        $this->travelTo($todaysSecondGuide->starts_at->copy()->subSecond());
+
+        $responseData = $this->getUpcoming(Channel::TWO)
+            ->assertOk()
+            ->assertJsonCount(3, 'data');
+
+        [$firstGuide, $secondGuide, $lastGuide] = $responseData->json('data');
+        $this->assertGuide($todaysFirstGuide, $firstGuide, $todaysSecondGuide->starts_at);
+        $this->assertGuide($todaysSecondGuide, $secondGuide, $tomorrowGuide->starts_at);
+        $this->assertGuide($tomorrowGuide, $lastGuide, $tomorrowGuide->ends_at);
+    }
+
+    public function test_returns_empty_when_there_are_no_upcoming_guides(): void
+    {
+        $guide = Guide::factory()->createOne([
+            'channel_nr' => Channel::TWO->value,
+            'starts_at' => $this->dayStart->copy(),
+            'ends_at' => $this->dayStart->copy()->addHour(),
+        ]);
+
+        $this->travelTo($guide->ends_at->copy()->addSecond());
+
+        $this->getUpcoming(Channel::TWO)
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
     }
 }

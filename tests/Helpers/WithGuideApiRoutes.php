@@ -15,4 +15,18 @@ trait WithGuideApiRoutes
             'date' => $date->toDateString(),
         ]));
     }
+
+    private function getOnAir(Channel $channel): TestResponse
+    {
+        return $this->getJson(route('on-air', [
+            'channel_nr' => $channel->value
+        ]));
+    }
+
+    private function getUpcoming(Channel $channel): TestResponse
+    {
+        return $this->getJson(route('upcoming', [
+            'channel_nr' => $channel->value
+        ]));
+    }
 }
